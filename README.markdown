@@ -1,0 +1,3 @@
+# Maya scripts repository
+Scripts I have written and collected over the years...
+[*http://timreischmann.com/*](http://timreischmann.com/)
