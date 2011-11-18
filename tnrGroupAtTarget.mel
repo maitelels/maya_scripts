@@ -1,0 +1,69 @@
+/*
+tnrGroupAtTarget.mel
+groupAtTarget()
+*/
+
+////////////////////////////
+// tnrGroupAtTarget.mel   //
+/////////////////////////////////////////////////////////////
+//                                                         //
+// scripts will build a locator for every object selected  //
+// at the objects position                                 //
+//                                                         //
+// usage:                                                  //
+// select any number of objects                            //
+// source "tnrGroupAtTarget.mel"                           //
+// groupAtTarget();                                        //
+//                                                         //
+// all objects from selection will have a locator in place //
+//                                                         //
+/////////////////////////////////////////////////////////////
+
+
+
+global proc groupAtTarget()
+{
+	//query selection, determine size and initialize var for loop
+	string $sel[]= `ls -sl`;
+	string $restoreSel[]= `ls -sl`;
+	int $numSel=`size $sel`;
+	int $i=0;
+	
+	//loop that will create a locator every item in selection at position of selection
+	for ($i=0; $i <= ($numSel-1); $i++)
+	{
+		//create locator to use as target location
+		string $targetObject[0]=`spaceLocator -n targetObject_loc`;
+		
+		//point constraint locator to selection1 and delete constraint
+		pointConstraint -n matchObjectsConstaint $sel[$i] $targetObject[0];
+		delete matchObjectsConstaint;
+		
+		//orient constraint locator to selection1 and delete constraint
+		orientConstraint -n matchObjectsConstaint $sel[$i] $targetObject[0];
+		delete matchObjectsConstaint;
+		
+		//query position and orientation of target in world space
+		float $targetPosition[2]=`xform -worldSpace -q -translation $targetObject[0]`;
+		float $targetOrientation[2]=`xform -worldSpace -q -rotation $targetObject[0]`;
+		
+		//create locator and store name in var
+		string $newGroupName= ($sel[$i]+"_grp");
+		string $newGroup=`group -em -n $newGroupName`;
+		
+		//position locator in worldspace
+		setAttr ($newGroup+".tx") $targetPosition[0];
+		setAttr ($newGroup+".ty") $targetPosition[1];
+		setAttr ($newGroup+".tz") $targetPosition[2];
+	
+		//orient locator in worldspace
+		setAttr ($newGroup+".rx") $targetOrientation[0];
+		setAttr ($newGroup+".ry") $targetOrientation[1];
+		setAttr ($newGroup+".rz") $targetOrientation[2];
+		
+		delete $targetObject[0];
+	}
+	
+	select -r $restoreSel;
+
+}

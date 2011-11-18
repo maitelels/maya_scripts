@@ -1,0 +1,63 @@
+/*
+tnrClusterComponent.mel
+clusterComponent
+*/
+
+/////////////////////////////
+// tnrClusterComponent.mel //
+//////////////////////////////////////////////////////////
+//                                                      //
+// takes a selection of components of various types,    //
+// clusters them and attaches the clusters to locators. //
+// The locators are then grouped.                       //
+//                                                      //
+// usage:                                               //
+// have an active selection of components               //
+// source "TR_clusterComponent.mel"                     //
+//                                                      //
+//                                                      //
+// Any probs give me a shout                            //
+// TIM                                                  //
+// tnr@dneg.com                                         //
+//                                                      //
+//////////////////////////////////////////////////////////
+
+
+global proc clusterComponent()
+{
+	//stores number and names of selected copmonents in variables
+	string $toCluster_selection[]= `ls -fl -sl`;
+	int $num_toCluster_selection=`size $toCluster_selection`;
+	
+	//builds a group for the resulting locators to be stored in
+	string $clusterComponentGroup= `group -em -n clusterComponent_grp`;
+	
+	//loop that does the actual work
+	int $i;
+	for ($i=0; $i<= ($num_toCluster_selection-1); $i++)
+	{
+		//determine world space position for selected component
+		float $positionInWorldSpace[2]= `xform -worldSpace -q -translation ($toCluster_selection[$i])`;
+		
+		//select component and build cluster
+		select -r $toCluster_selection[$i];
+		cluster -n "toCluster1";
+		
+		//build cluster at component world space position and center pivot
+		spaceLocator -n ("toCluster"+($i+1)+"_loc") -p $positionInWorldSpace[0] $positionInWorldSpace[1] $positionInWorldSpace[2];
+		xform -cp ("toCluster"+($i+1)+"_loc");
+		
+		//parent cluster to its locator
+		parent ("toCluster"+($i+1)+"Handle") ("toCluster"+($i+1)+"_loc");
+		
+		//hide cluster
+		setAttr ("toCluster"+($i+1)+"Handle.visibility") 0;
+		
+		//locator with cluster into group
+		parent ("toCluster"+($i+1)+"_loc") $clusterComponentGroup;
+	}
+	
+	//center the pivot of the group and select it
+	xform -cp $clusterComponentGroup;
+	select -r $clusterComponentGroup;
+}

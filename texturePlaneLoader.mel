@@ -1,0 +1,167 @@
+//LTB: source texturePlaneLoader; tpl_def;
+
+// texturePlaneLoader.mel
+// by Volker Heisterberg (volk@renderwahnsinn.de)
+// Version: 1.0
+// LastChanged: 09.01. 2005
+// What is this?:
+// This loads a file texture and assigns it to a plane scaled accordingly!
+// Usage:
+// Simple Mode: enter texturePlaneLoader at the command line.
+
+// Shortcuts and Advanced Mode are available after sourcing this file!
+
+// Advanced Mode: enter tpl <<DIFFUSE>> <<UpAxis>> <<AMBCOLOR>> <<SNAP>> <<P2dT>>
+//                DIFFUSE: Diffuse-Value, between 0 and 1
+//		  UpAxis: 1: X-Axis 2: Y-Axis 3: Z-Axis
+//		  AMBCOLOR: 3 Float: 1 1 1 -> white
+//		  SNAP: 0 -> doesn´t snap 1 -> does snap
+//		  P2dT: 0 -> no texture placement 1 -> with texture placement
+
+// Shortcuts:
+// tplUI -> same as texturePlaneLoader
+// tpl_def -> tpl with my default settings (diffuse & amb -> 0, x-axis up, no snapping, with place2dTexture-Node)
+
+// I hope you like the script, send me an email if you got ideas how to improve it!
+
+
+global proc texturePlaneLoader()
+{
+	tplUI();
+}
+
+global proc tpl_def()
+{
+	tpl(0, 1, 0, 0, 0, 0, 1);
+}
+
+
+global proc tplUI()
+{
+	if ((`window -ex tplWindow`) == 1) deleteUI -window tplWindow;
+	window -title "Texture Plane Loader" -menuBar true -widthHeight 400 80 tplWindow;
+	columnLayout;
+	string $rbg = `radioButtonGrp -numberOfRadioButtons 3 -label "Up Axis" -labelArray3 "X-Up" "Y-Up" "Z-Up" -sl 1`;
+	string $ccg = `colorSliderGrp -label "Ambient Color" -rgb 0 0 0`;
+	string $dc = ` floatSliderGrp -label "Diffuse Color" -field true
+ 		-minValue 0.0 -maxValue 1.0
+ 		-fieldMinValue 0.0 -fieldMaxValue 1.0
+ 		-value 0.8`;
+ 	gridLayout -numberOfColumns 2 -cellWidth 200;
+ 	string $checkSnap = `checkBox -label "snap to current selection" -value 0`;
+ 	string $check2PN = `checkBox -label "create with place2dtexture - node" -value 0`;
+ 	string $checkAlpha = `checkBox -label "connect alpha" -value 0`;
+ 	string $checkFilter = `checkBox -label "turn off texture filtering" - value 0`;
+ 	setParent..;
+ 	gridLayout -numberOfColumns 3 -cellWidth 133;
+	button -label "Load Texture Plane" -command ("int $upV = `radioButtonGrp -q -sl " + $rbg + "`; float $dv = `floatSliderGrp -q -v " + $dc + "`;int $testSnap = `checkBox -q -v " + $checkSnap + "`; int $testPlace = `checkBox -q -v " + $check2PN + "`; vector $ac = `colorSliderGrp -q -rgb " + $ccg + "`; int $testAlpha= `checkBox -q -v " + $checkAlpha + "`; int $testFilter = `checkBox -q -v " + $checkFilter + "`; tpl($dv, $upV, <<$ac.x, $ac.y, $ac.z>>, $testSnap, $testPlace, $testAlpha, $testFilter); deleteUI -window tplWindow;");
+	button -label "Apply" -command ("int $upV = `radioButtonGrp -q -sl " + $rbg + "`; float $dv = `floatSliderGrp -q -v " + $dc + "`;int $testSnap = `checkBox -q -v " + $checkSnap + "`; int $testPlace = `checkBox -q -v " + $check2PN + "`; vector $ac = `colorSliderGrp -q -rgb " + $ccg + "`; int $testAlpha= `checkBox -q -v " + $checkAlpha + "`; int $testFilter = `checkBox -q -v " + $checkFilter + "`; tpl($dv, $upV, <<$ac.x, $ac.y, $ac.z>>, $testSnap, $testPlace, $testAlpha, $testFilter);");
+	button -label "Cancel" -command "deleteUI -window tplWindow;";
+ 	showWindow;
+}
+
+
+global proc tpl(float $diffuse, int $zUp, vector $ambColor, int $snap, int $TwoP, int $alpha, int $filter)
+{
+	// check for snap
+	vector $snapTo = << 0 , 0 , 0>>;
+	if ($snap)
+	{
+		string $list[] = `ls -sl`;
+		if (size($list)<1)
+		{
+		error ("You have activated snap but nothing to snap to is selected!");
+		}
+		else
+		{
+		$snapTo = `xform -q -ws -t $list[0]`;
+		}
+	}
+	string $filename = `fileDialog`;
+	string $fileNode = `shadingNode -asTexture file`;
+	setAttr -type "string" ($fileNode + ".fileTextureName") $filename;
+	int $xSize = `getAttr ($fileNode + ".outSizeX")`;
+	int $ySize = `getAttr ($fileNode + ".outSizeY")`;
+	float $ratio = (float) $ySize / (float) $xSize;
+	string $shortFilename = basename( $filename, "" );
+	string $nameList[];
+	$numTokens = `tokenize $shortFilename "." $nameList`;
+	int $up1 = 0;
+	int $up2 = 1;
+	int $up3 = 0;
+	
+	if ($zUp==1)
+	{ // X-Up
+		$up1 = 1;
+		$up2 = 0;
+		$up3 = 0;
+	}
+	
+	if ($zUp==2)
+	{
+	// Y-Up
+		$up1 = 0;
+		$up2 = 1;
+		$up3 = 0;
+	}
+	
+	if ($zUp==3)
+	{
+	// Z-Up
+		$up1 = 0;
+		$up2 = 0;
+		$up3 = 1;
+	}
+	
+	// rename file node
+	string $fileNode = `rename $fileNode ("file_" + $nameList[0])`;
+	
+	string $myPlane[] = `nurbsPlane -p 0 0 0 -ax ($up1) ($up2) ($up3) -w 1 -lr ($ratio) -d 3 -u 1 -v 1 -ch 1 -name ("plane_" + $nameList[0])`;
+	string $lambert = `shadingNode -asShader lambert -name ("lamb_" + $nameList[0])`;
+	setAttr ($lambert + ".diffuse") $diffuse;
+	setAttr ($lambert + ".ambientColorR") ($ambColor.x);
+	setAttr ($lambert + ".ambientColorG") ($ambColor.y);
+	setAttr ($lambert + ".ambientColorB") ($ambColor.z);
+	string $sg = `sets -renderable true -noSurfaceShader true -empty -name ($lambert + "SG")`;
+	connectAttr -f ($lambert + ".outColor") ($sg + ".surfaceShader");
+	connectAttr -f ($fileNode + ".outColor") ($lambert + ".color");
+	if ($alpha==1) connectAttr -f ($fileNode + ".outTransparency") ($lambert + ".transparency");
+	select -r ($myPlane[0]) ;sets -e -forceElement ($sg);
+	if ($snap)
+	{
+		string $cmd = "xform -ws -t " + ($snapTo.x) + " " +  ($snapTo.y) + " " + ($snapTo.z) + " " + ($myPlane[0]);
+		print $cmd;
+		eval ($cmd);
+	}
+	
+	// check for 2D-Placement-Utility
+	if ($TwoP)
+	{
+		string $P2T = `shadingNode -asUtility place2dTexture -name ("place2dTexture_" + $nameList[0])`;
+		connectAttr -f ($P2T + ".outUV") ($fileNode + ".uvCoord"); 
+		connectAttr -f ($P2T + ".outUvFilterSize") ($fileNode + ".uvFilterSize"); 
+		connectAttr -f ($P2T + ".coverage") ($fileNode + ".coverage");
+		connectAttr -f ($P2T + ".translateFrame") ($fileNode + ".translateFrame");
+		connectAttr -f ($P2T + ".rotateFrame") ($fileNode + ".rotateFrame");
+		connectAttr -f ($P2T + ".mirrorU") ($fileNode + ".mirrorU");
+		connectAttr -f ($P2T + ".mirrorV") ($fileNode + ".mirrorV");
+		connectAttr -f ($P2T + ".stagger") ($fileNode + ".stagger");
+		connectAttr -f ($P2T + ".wrapU") ($fileNode + ".wrapU");
+		connectAttr -f ($P2T + ".wrapV") ($fileNode + ".wrapV");
+		connectAttr -f ($P2T + ".repeatUV") ($fileNode + ".repeatUV");
+		connectAttr -f ($P2T + ".vertexUvOne") ($fileNode + ".vertexUvOne");
+		connectAttr -f ($P2T + ".vertexUvTwo") ($fileNode + ".vertexUvTwo");
+		connectAttr -f ($P2T + ".vertexUvThree") ($fileNode + ".vertexUvThree");
+		connectAttr -f ($P2T + ".vertexCameraOne") ($fileNode + ".vertexCameraOne");
+		connectAttr -f ($P2T + ".noiseUV") ($fileNode + ".noiseUV");
+		connectAttr -f ($P2T + ".offset") ($fileNode + ".offset");
+		connectAttr -f ($P2T + ".rotateUV") ($fileNode + ".rotateUV");
+	}
+	
+	// check for filtering
+	if ($filter)
+	{
+		setAttr ($fileNode + ".filterType") 0;
+	}
+	
+}

@@ -1,0 +1,15 @@
+global proc selectionTest()
+{
+string $select[]= `ls -sl`;
+string $keyAttr[]=`keyframe -q -sl -n`;
+$path = `internalVar -ubd`;
+
+	if ((size ($select)==0)||(size ($keyAttr)==0)){
+	image -e -image ($path+"/curveLocalScale/warning.png") image2;
+	warning "!!...::You must first select keys and then push the update button::...!!";
+	}
+	else{
+	bufferCurve -animation keys -overwrite true;
+	print ("!!...::Push the update button each time you want to change your key selection::...!!"+"\n");
+	} 
+}

@@ -1,0 +1,33 @@
+//CONFIGURATION MEL SCRIPT for om_renderUI by Oliver Markowski - u can use mel syntax as well
+//put this script in one of your script directories....om_renderUI.mel can stay in your companies global script path.  
+//VISIT www.fullblownimages.com for updates.
+
+//SET YOUR PREFERRED RENDER DISTRIBUTOR - 1 for Cube - 2 for SMEDGE - 3 for local rendering (vray only ATM - you must have the vray-bin directory set in your Path-env variable )
+	global int $preferredDistributor = 2;
+
+//COMMON
+	//global string $defaultPool = "8GB";
+	
+//SMEDGE - path to submit.exe - u must use \\ for  a single backslash
+	global string $submit = "\\\\blackout\\SMEDGE\\Submit.exe";
+
+//ROYAL RENDER - path to submitter_commandline.exe - u must use \\ for  a single backslash
+	global string $RRsubmit = "\\\\pslsrv24\\ROYAL_RENDER\\tools\\submitter_commandline.exe";
+	global string $RR60submit = "//blackout/ROYAL_RENDER/bin/win/rrSubmitterconsole.exe";
+	global string $RR60submitLX = "/usr/ROYAL_RENDER/bin/lx/rrSubmitterconsole";
+
+//LOCAL RENDER - configuration of your very own renderhost clientgroup - u MUST fill in the IP - otherwise Vray sometimes will not use them
+	//global string $renderHosts="192.168.2.101;192.168.2.108;192.168.2.109";
+	global string $renderHosts="renderm10;renderm11;renderm12;renderm13;renderm14;renderm15;renderm16;renderm17;renderm18;renderm19;";
+	
+	
+//SHADERLIBRARY GLOBAL  PATH 
+	global string $shaderLibPath;
+	//$shaderLibPath="//pslsrv10/pslsrv10/Projects/TMW09_ANM06_Infiniti_G37_Convertible/TM09A06_3D/TM09A06_Shaders";
+	//example for using it on a per project library 
+	//$shaderLibPath=(`workspace -q -rd` + "shaders");
+	//or use it as a glbal path
+	$shaderLibPath="//blackout/PROJECTS/PROJECTS/SHADERLIBRARY/NEW";
+	
+	
+	

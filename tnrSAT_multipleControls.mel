@@ -1,0 +1,591 @@
+/*
+tnrSAT_multipleControls.mel
+tnrSAT_multipleControls
+*/
+//{{{ 
+
+//////////////////////////////////////////////////////////////////
+//  tnrSAT_multipleControls.mel                                 //
+//                                                              //
+//  Author:          Tim Reischmann                             //
+//  Version:         1.1                                        //
+//  Last Modified:   19/02/2010                                 //
+//                                                              //
+//                                                              //
+//  Desciption:                                                 //
+//  This script will allow you to copy animation and attribute  //
+//  values from one set of controls to another. It will allow   //
+//  retargeting as well.                                        //
+//                                                              //
+//                                                              //
+//  Usage:                                                      //
+//  source "tnrSAT_multipleControls.mel";                       //
+//  tnrSAT_multipleControls();                                  //
+//                                                              //
+//  Use the Select buttons to select both sets. The animation   //
+//  will be copied from one entry to the corresponding entry    //
+//  in the same line. Adjust the mapping by moving the entries  //
+//  up and down in the list.                                    //
+//                                                              //
+//                                                              //
+//  Bugs & Limitations:                                         //
+//                                                              //
+//                                                              //
+//////////////////////////////////////////////////////////////////
+
+//}}}
+
+global proc tnrSAT_multipleControls()
+//calls the UI for the tool
+//{{{ 
+{
+	//call the script that will monitor procedure usage
+	source "tnrScriptCallCounterSA.mel";
+	tnrScriptCallCounterSA tnrSAT_multipleControls;
+	
+	tnrSAT_multipleControlsUI();
+}
+//}}}
+
+global proc tnrSAT_multipleControls_DoSimpleTransfer(string $sourceObj[], string $targetObj[], int $numObj)
+//first copies the attributes and then the animation curves
+//{{{ 
+{
+	//loop to run through every line of the handles supposed to be copied
+	int $i = 0;
+	
+	for ($i = 0 ; $i <= ($numObj-1) ; $i++)
+	{
+		//check for existing animation curves and delete them
+		string $curvesToBreak[] = `listConnections -t animCurve ($targetObj[$i])`;
+		
+		for ($item in $curvesToBreak)
+		{
+			delete $item;
+		}
+		
+		//find the keyable attributes on source check for equivalent on target and set if found
+		string $copyAttrName[]= `listAttr -keyable $sourceObj[$i]`;
+		
+		for ($item in $copyAttrName)
+		{
+			if (objExists (($targetObj[$i])+"."+$item))
+			{
+				float $copyAttrValue=0;
+				string $sourceObjString = $sourceObj[$i];
+				string $targetObjString = $targetObj[$i];
+				
+				$copyAttrValue = `getAttr ($sourceObjString+"."+$item)`;
+				
+				setAttr ($targetObjString+"."+$item) $copyAttrValue;
+			}
+		}
+		
+		//find all animation curves to copy and use Maya's build in procedures to copy
+		string $sourceObjCurves[] = `listConnections -t animCurve ($sourceObj[$i])`;
+		
+		//check if object has any animation and skip if it doesn't
+		if (!(size($sourceObjCurves)))
+		{
+			continue;
+		}		
+		
+		//copy curves
+		bufferCurve
+		-animation "keys"
+		-overwrite false
+		{$sourceObj[$i]}
+		;
+		
+		copyKey
+		-time ":"
+		-float ":"
+		-hierarchy none
+		-controlPoints 0
+		-shape 1 
+		{$sourceObj[$i]}
+		;
+		
+		//paste curves
+		bufferCurve
+		-animation "keys"
+		-overwrite false
+		{$targetObj[$i]}
+		;
+		
+		pasteKey
+		-option replaceCompletely
+		-copies 1 
+		-connect 0
+		-timeOffset 0
+		-floatOffset 0
+		-valueOffset 0
+		{$targetObj[$i]}
+		;
+		
+	}
+}
+//}}}
+
+global proc tnrSAT_multipleControls_adjustWindowHeight(int $textScrollListItems)
+//can adjust window size according to number of items in list
+//{{{ 
+{
+	/*
+	int $windowWidth = 400;
+	int $textScrollListHeight = 17;
+	int $buttonHeight = 25;
+	int $buttonWidth = ($windowWidth/2)-2;
+	int $windowHeight = ($buttonHeight*2)+($textScrollListHeight*$textScrollListItems);
+	
+	window 
+	-e
+	-height $windowHeight
+	tnrSAT_multipleControlsWindow
+	;
+	*/
+}
+//}}}
+
+global proc tnrSAT_multipleControls_reloadListItems(string $listName)
+//will repopulate desired list with selected objects
+//{{{ 
+{
+	//get only selected transform nodes
+	string $sel[] = sort(`ls -sl -type transform`);
+	int $numSel = size($sel);
+	
+	//if there are nodes selected clear list and put selection on
+	if (!($numSel==0))
+	{
+		textScrollList
+		-edit
+		-removeAll
+		//-numberOfRows $numSel
+		$listName
+		;
+		
+		for ($item in $sel)
+		{
+			textScrollList
+			-edit
+			-append $item
+			$listName
+			;
+		}
+	}
+	
+	//if no objects are selected put message in list
+	else
+	{
+		textScrollList
+		-edit
+		-removeAll
+		//-numberOfRows $numSel
+		$listName
+		;
+		
+		textScrollList
+		-edit
+		-append "no controls selected"
+		$listName
+		;
+	}
+	
+	//determine which list has most items. Only neccesary if reseize is enabled
+	int $numtnrSAT_left_tsl = `textScrollList -q -numberOfItems tnrSAT_left_tsl`;
+	int $numtnrSAT_right_tsl = `textScrollList -q -numberOfItems tnrSAT_right_tsl`;
+	int $textScrollListItems=0;
+	
+	if ($numtnrSAT_left_tsl >= $numtnrSAT_right_tsl)
+	{
+		$textScrollListItems = $numtnrSAT_left_tsl;
+	}
+	else
+	{
+		$textScrollListItems = $numtnrSAT_right_tsl;
+	}
+	
+	//call the window reseizing procedure with the highest number of list entries
+	tnrSAT_multipleControls_adjustWindowHeight($textScrollListItems);
+}
+//}}}
+
+global proc tnrSAT_multipleControls_addItemToList(string $listName)
+//will add selected transform node at the end of the list
+//{{{ 
+{
+	string $sel[] = sort(`ls -sl -type transform`);
+	int $numSel = size($sel);
+	
+	if ($numSel == 1)
+	{
+		textScrollList
+		-edit
+		-append $sel[0]
+		$listName
+		;
+	}
+}
+//}}}
+
+global proc tnrSAT_multipleControls_removeItemFromList(string $listName)
+//will remove the selected list item
+//{{{ 
+{
+	int $numberOfItems = `textScrollList -q -numberOfItems $listName`;
+	int $numberOfSelectedItems = `textScrollList -q -numberOfSelectedItems $listName`;
+	
+	//check if there is an item than can be deleted
+        if ($numberOfItems <= 0)
+	{
+		warning "tnrSAT_multipleControls | nothing there to remove...";
+	}
+	
+	//check if an item is selected to be removed
+	if ($numberOfSelectedItems < 1)
+	{
+		warning "tnrSAT_multipleControls | must select item to remove...";
+	}
+	
+	//if an item is selected, delete it and select the next existing item
+	else
+	{
+		int $indexOfItemToDelete[] = `textScrollList -q -selectIndexedItem $listName`;
+		textScrollList -e -removeIndexedItem $indexOfItemToDelete[0] $listName;
+		
+		if (($indexOfItemToDelete[0]-1)>=1)
+		{
+		textScrollList -e -selectIndexedItem ($indexOfItemToDelete[0]-1) $listName;
+		}
+		
+		if (($indexOfItemToDelete[0])==1)
+		{
+		textScrollList -e -selectIndexedItem 1 $listName;
+		}
+	}
+} //}}}
+
+global proc tnrSAT_multipleControls_copy(int $direction)
+//will call the copying procedure
+//{{{ 
+{
+	//check if each list has equal number of items
+	string $leftTextScollListItems[] = `textScrollList -q -allItems tnrSAT_left_tsl`;
+	int $numLeftTextScollListItems = size($leftTextScollListItems);
+	
+	string $rightTextScollListItems[] = `textScrollList -q -allItems tnrSAT_right_tsl`;
+	int $numRightTextScollListItems = size($rightTextScollListItems);
+	
+	if (!($numLeftTextScollListItems==$numRightTextScollListItems))
+	{
+		error "tnrSAT_multipleControls | choose equal number of arguments";
+	}
+	
+	//calls the procedure with the two lists for copying and the direction of copy
+	switch($direction)
+	{
+		case 1:
+		tnrSAT_multipleControls_DoSimpleTransfer($leftTextScollListItems, $rightTextScollListItems, $numLeftTextScollListItems);
+		break;
+		
+		case 2:
+		tnrSAT_multipleControls_DoSimpleTransfer($rightTextScollListItems, $leftTextScollListItems, $numLeftTextScollListItems);
+		break;
+		
+		default:
+		error "tnrSAT_multipleControls | wrong argument specified";
+		break;
+	}
+}
+//}}}
+
+global proc tnrSAT_multipleControls_manualSortList(string $listName, string $condition)
+//push list items up and down 
+//{{{ 
+{
+	int $newPosition = 0;
+	int $numberOfItems = `textScrollList -q -numberOfItems $listName`;
+	int $numberOfSelectedItems = `textScrollList -q -numberOfSelectedItems $listName`;
+	
+	//check if there is data to sort
+        if ($numberOfItems <= 0)
+	{
+		warning "tnrSAT_multipleControls | nothing there to sort...";
+	}
+	
+	//check if item is selected to sort
+	if ($numberOfSelectedItems < 1)
+	{
+		warning "tnrSAT_multipleControls | must select item to sort...";
+	}
+	
+	//switch will determine wether item moves up or down in list
+	int $numItemToReorder[] = `textScrollList -q -selectIndexedItem $listName`;
+	string $itemToReorder[] = `textScrollList -q -selectItem $listName`;
+		
+	switch ($condition)
+	{
+		//get the current position, delete item, insert it one position earlier
+		case "up":
+		if ($numItemToReorder[0] > 1)
+		{
+			$newPosition = ($numItemToReorder[0]-1);
+			
+			textScrollList -e -removeIndexedItem $numItemToReorder[0] $listName;
+			textScrollList -e -appendPosition $newPosition $itemToReorder[0] $listName;
+			textScrollList -e -selectIndexedItem $newPosition $listName;    
+		}
+		break;
+		
+		//get the current position, delete item, insert it one position later
+		case "down":
+		if ($numItemToReorder[0] < $numberOfItems)
+		{
+			$newPosition = ($numItemToReorder[0]+1);
+			textScrollList -e -removeIndexedItem $numItemToReorder[0] $listName;
+			textScrollList -e -appendPosition $newPosition $itemToReorder[0] $listName;
+			textScrollList -e -selectIndexedItem $newPosition $listName;
+		}
+		break;
+		
+		//failsafe
+		default:
+		error "wrong argument";
+		break;
+	}
+}
+//}}}
+
+global proc reDoCache_selectObjectFromList(string $selectedList)
+//will select selected in list
+//{{{ 
+{
+	//query the selected list items and store them
+	string $objectToSelect[] = `textScrollList -q -selectItem $selectedList`;
+	
+	//clear the selection
+	select -cl;
+	
+	//loop that will add selected list items to current selection
+	for ($item in $objectToSelect)
+	{
+		select -add $item;
+	}
+}
+//}}}
+
+global proc tnrSAT_multipleControlsUI()
+//build the UI
+//{{{ 
+{
+	
+	//////////////////
+	// BUILD WINDOW //
+	//////////////////
+	
+	//initialize variables for window size
+	
+	int $windowWidth = 700;
+	int $textScrollListHeight = 500;
+	int $buttonHeight = 30;
+	int $buttonWidth = $windowWidth/2;
+	int $windowHeight = $textScrollListHeight+(6*$buttonHeight);
+	//int $windowHeight = ($buttonHeight*2)+$textScrollListHeight;
+	
+	//delete window if it is still open
+	if (`window -exists tnrSAT_multipleControlsWindow`)
+	{
+		deleteUI -window tnrSAT_multipleControlsWindow;
+	}
+	
+	//build ui 
+	window 
+	-title "tnrSAT_multipleControls" 
+	-width $windowWidth
+	-height $windowHeight
+	tnrSAT_multipleControlsWindow
+	;
+	
+	rowColumnLayout
+	-numberOfColumns 2
+	-columnWidth 1 ($windowWidth/2)
+	-columnWidth 2 ($windowWidth/2)
+	;
+	
+	
+	
+	////////////////////
+	// BUILD CONTROLS //
+	////////////////////
+	
+	
+	//LIST LEFT
+	{
+		textScrollList
+		-width ($windowWidth/2)
+		-height $textScrollListHeight
+		-font "fixedWidthFont"
+		-selectCommand "reDoCache_selectObjectFromList tnrSAT_left_tsl"
+		tnrSAT_left_tsl
+		;
+	}
+	
+	//LIST RIGHT
+	{
+		textScrollList
+		-width ($windowWidth/2)
+		-height $textScrollListHeight
+		-font "fixedWidthFont"
+		-selectCommand "reDoCache_selectObjectFromList tnrSAT_right_tsl"
+		tnrSAT_right_tsl
+		;
+	}
+	//SELECT LEFT
+	{
+		iconTextButton
+		-image1 "tnr/tnr_btn_select.xpm"
+		-width $buttonHeight
+		-height $buttonHeight
+		-command "tnrSAT_multipleControls_reloadListItems tnrSAT_left_tsl"
+		tnrSAT_reloadLeft_btn
+		;
+	}
+	//SELECT RIGHT
+	{
+		iconTextButton
+		-image1 "tnr/tnr_btn_select_purple.xpm"
+		-width $buttonHeight
+		-height $buttonHeight
+		-command "tnrSAT_multipleControls_reloadListItems tnrSAT_right_tsl"
+		tnrSAT_reloadRight_btn
+		;
+	}
+	//ADD LEFT
+	{
+		iconTextButton
+		-enable true
+		-image1 "tnr/tnr_btn_plus.xpm"
+		-width $buttonHeight
+		-height $buttonHeight
+		-command "tnrSAT_multipleControls_addItemToList tnrSAT_left_tsl"
+		tnrSAT_LAdd_btn
+		;
+	}
+	//ADD RIGHT
+	{
+		iconTextButton
+		-enable true
+		-image1 "tnr/tnr_btn_plus_purple.xpm"
+		-width $buttonHeight
+		-height $buttonHeight
+		-command "tnrSAT_multipleControls_addItemToList tnrSAT_right_tsl"
+		tnrSAT_RAdd_btn
+		;
+	}
+	//REMOVE LEFT
+	{	
+		iconTextButton
+		-enable true
+		-image1 "tnr/tnr_btn_minus.xpm"
+		-width $buttonHeight
+		-height $buttonHeight
+		-command "tnrSAT_multipleControls_removeItemFromList tnrSAT_left_tsl"
+		tnrSAT_LRemove_btn
+		;
+	}
+	//REMOVE RIGHT
+	{
+		iconTextButton
+		-enable true
+		-image1 "tnr/tnr_btn_minus_purple.xpm"
+		-width $buttonHeight
+		-height $buttonHeight
+		-command "tnrSAT_multipleControls_removeItemFromList tnrSAT_right_tsl"
+		tnrSAT_RRemove_btn
+		;
+	}
+	//UP LEFT
+	{	
+		iconTextButton
+		-image1 "tnr/tnr_btn_up.xpm"
+		-width $buttonHeight
+		-height $buttonHeight
+		-command "tnrSAT_multipleControls_manualSortList tnrSAT_left_tsl up"
+		tnrSAT_LUP_btn
+		;
+	}
+	//UP RIGHT
+	{	
+		iconTextButton
+		-image1 "tnr/tnr_btn_up_purple.xpm"
+		-width $buttonHeight
+		-height $buttonHeight
+		-command "tnrSAT_multipleControls_manualSortList tnrSAT_right_tsl up"
+		tnrSAT_RUP_btn
+		;
+	}
+	//DOWN LEFT
+	{
+		iconTextButton
+		-image1 "tnr/tnr_btn_down.xpm"
+		-width $buttonHeight
+		-height $buttonHeight
+		-command "tnrSAT_multipleControls_manualSortList tnrSAT_left_tsl down"
+		tnrSAT_LDN_btn
+		;
+	}
+	//DOWN RIGHT
+	{
+		iconTextButton
+		-image1 "tnr/tnr_btn_down_purple.xpm"
+		-width $buttonHeight
+		-height $buttonHeight
+		-command "tnrSAT_multipleControls_manualSortList tnrSAT_right_tsl down"
+		tnrSAT_RDN_btn
+		;	
+	}
+	//COPY LEFT
+	{
+		iconTextButton
+		-image1 "tnr/tnr_btn_copyLtoR.xpm"
+		-width $buttonHeight
+		-height $buttonHeight
+		-command "tnrSAT_multipleControls_copy 1"
+		tnrSAT_copyLeftToRight_btn
+		;
+	}
+	//COPY RIGHT
+	{
+		iconTextButton
+		-image1 "tnr/tnr_btn_copyRtoL_purple.xpm"
+		-width $buttonHeight
+		-height $buttonHeight
+		-command "tnrSAT_multipleControls_copy 2"
+		tnrSAT_copyRightToLeft_btn
+		;
+	}
+	
+	
+	//
+	print ("\/\/ tnrSAT_multipleControls | successfully loaded...");
+	
+	//parent to window above
+	setParent ..;
+	
+	
+	/////////////////////////////////
+	// RESIZE AND SHOW MAIN WINDOW //
+	/////////////////////////////////
+	
+	window 
+	-e 
+	-width $windowWidth
+	-height $windowHeight
+	tnrSAT_multipleControlsWindow
+	;
+	
+	//display window
+	showWindow tnrSAT_multipleControlsWindow;
+}
+//}}}

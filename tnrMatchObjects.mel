@@ -1,0 +1,107 @@
+//LTB: source tnrMatchObjects;matchObjectsRotationTranslation()
+ 
+
+/////////////////////////
+// tnrMatchObjects.mel //
+/////////////////////////////////////////////////////////////////////
+//                                                                 //
+// This script consists of three simple procedures that will match //
+// translation and/or rotation of two given objects.               //
+//                                                                 //
+// usage:                                                          //
+// select target, select object to match                           //
+// source "tnrMatchObjects.mel";                                   //
+//                                                                 //
+// to match rotation;                                              //
+// matchRotation();                                                //
+//                                                                 //
+// to match translation:                                           //
+// matchTranslation();                                             //
+//                                                                 //
+// to match both:                                                  //
+// matchObjectsRotationTranslation();                                     //
+//                                                                 //
+//                                                                 //
+// Any probs give me a shout                                       //
+// TIM                                                             //
+// tnr@dneg.com                                                    //
+//                                                                 //
+/////////////////////////////////////////////////////////////////////
+
+
+
+global proc matchObjectsRotation()
+{
+	//get selection
+	string $sel[]= `ls -sl`;
+	string $restoreSel[]= `ls -sl`;
+	
+	if ((size($sel)<1))
+	{
+		error "matchObjects | select only two objects";
+	}
+	
+	//create locator to use as target location
+	string $targetObject[0]=`spaceLocator -n targetObject_loc`;
+	
+	//point constraint locator to selection1 and delete constraint
+	orientConstraint -n matchObjectsConstaint $sel[0] $targetObject[0];
+	delete matchObjectsConstaint;
+	
+	//query the targets position in space
+	float $selTargetOrientation[2]=`xform -worldSpace -q -rotation $targetObject[0]`;
+	
+	//set object's position to target's position
+	setAttr ($sel[1]+".rx") $selTargetOrientation[0];
+	setAttr ($sel[1]+".ry") $selTargetOrientation[1];
+	setAttr ($sel[1]+".rz") $selTargetOrientation[2];
+	
+	delete $targetObject[0];
+	select -r $restoreSel;
+}
+
+
+global proc matchObjectsTranslation()
+{
+	//get selection
+	string $sel[]= `ls -sl`;
+	
+	if ((size($sel)<1))
+	{
+		error "matchObjects | select only two objects";
+	}
+	
+	string $restoreSel[]= `ls -sl`;
+	
+	//build locator that will do the "measuring"
+	string $locatorTargetPos[0]=`spaceLocator -n targetObject_loc`;
+	
+	//get it to the current location via point constraint and delete constraint
+	pointConstraint -n constraintCurrentPos $sel[1] $locatorTargetPos[0];
+	delete constraintCurrentPos;
+	
+	//freeze so the values are back to zero
+	performFreezeTransformations $locatorTargetPos[0];
+	
+	//point constraint to target position
+	pointConstraint -n constraintTargetPos $sel[0] $locatorTargetPos[0];
+	delete constraintTargetPos;
+	
+	//query the values to add to current values to move to target location
+	float $selTargetPosition[2];
+	
+	
+	move -relative -worldSpace (getAttr ($locatorTargetPos[0]+".tx")) (getAttr ($locatorTargetPos[0]+".ty")) (getAttr ($locatorTargetPos[0]+".tz")) ($sel[1]);
+
+	delete $locatorTargetPos[0];
+	select -r $restoreSel;
+	
+}
+
+
+global proc matchObjectsRotationTranslation()
+{
+	matchObjectsTranslation();
+	matchObjectsRotation();
+}
+

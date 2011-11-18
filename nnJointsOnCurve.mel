@@ -1,0 +1,82 @@
+/////////////////////////////// nnJointsOnCurve /////////////////////////////////
+
+//                              Scripted by -Nilesh Jadhav
+//                                                         27-07-2010
+/////////////////////////////////////////////////////////////////////////////////////
+// -------------- This script generates joint chain on selected Curve ---------------
+//////////////////////////////////////////////////////////////////////////////////////
+//
+////////////////////////// UI Designing for nnJointOnCurve /////////////////////////
+
+if (`window -exists curveJoint`)
+deleteUI "curveJoint";
+    
+    window -t "nnJointsOnCurve" -w 200 -h 200 -mnb 1 -mxb 0 -s 1 curveJoint;
+
+columnLayout -adj 1 -columnAttach "both" 1 -rowSpacing 10 -columnWidth 250;
+
+    intFieldGrp -l"Number of Joints" numberInt;
+    checkBoxGrp -l"Rebuild the Curve" rebuildCheck;
+    text -l "Select the Curve and press the Button" -fn "smallBoldLabelFont" ;
+    button -l"<< Add Joint Chain on Curve >>" -h 30 -c ("nnJointsOnCurve()") goButton;
+    text -l"Scripted by - Nilesh Jadhav" -bgc 1 1 1;
+
+showWindow curveJoint;
+
+
+
+/////////////////////////////////////  Procedure ////////////////////////////////////////////////
+
+global proc nnJointsOnCurve()
+{
+
+    string $sel []=`ls -sl`;
+    string $curve =$sel [0];
+    string $check =`checkBoxGrp -q -v1 rebuildCheck`;
+if ($check==1 )
+{
+rebuildCurve -rt 0 -s 25;
+
+}
+else
+{
+}
+    string $lcr []=`spaceLocator`;
+    string $loc =$lcr [0];
+
+    string $path =`pathAnimation  -stu 1 -etu 1000 -f on  $curve $loc `; 
+    int $numbers []=`intFieldGrp -q -v numberInt`;
+
+    float $locPos []=`xform -q -ws  -t $loc`;
+    int $divFacter =1000 / $numbers [0];
+
+select -cl;
+$i=`currentTime -q`;
+            for ($i=1; $i<1000; $i=$i+$divFacter) //--------- Loop to make joint chain
+                {
+
+
+
+        currentTime $i;
+        float $lcPos []=`xform -q  -ws -t locator1`;
+
+        string $joints =`joint -a -p $lcPos [0] $lcPos [1] $lcPos [2]`;
+
+}
+string $selJoint []=`ls -sl`;
+string $jnt =$selJoint [0]; 
+
+
+    $i =1;
+            for ( $i=1; $i<$numbers[0]+1; $i++) //--------- loop for getting 1st joint
+                {
+                    pickWalk -d up;
+                }    
+    
+    joint -e -oj xyz -secondaryAxisOrient yup -ch -zso;
+
+
+delete $path;
+delete $loc;
+currentTime -e 1;
+}

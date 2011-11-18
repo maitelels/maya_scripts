@@ -1,0 +1,26 @@
+/*
+timLocatorAtSelection.mel
+locatorAtSelection()
+*/
+
+global proc locatorAtSelection()
+{
+	string $sel[] = `ls -sl`;
+	for($current in $sel) {
+		string $loc[] = `spaceLocator -n ($current + "_loc")`;
+		string $tempLoc[] = `parentConstraint -w 1 $current $loc[0]`;
+		delete $tempLoc[0];
+	}
+}
+
+
+
+
+
+
+
+
+
+
+
+

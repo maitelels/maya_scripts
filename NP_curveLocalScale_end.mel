@@ -1,0 +1,49 @@
+ global proc end()
+{
+string $select[]= `ls -sl`;
+string $keyAttr[]=`keyframe -q -sl -n`;
+string $radioButton = `radioCollection -q -sl radioCo`;
+float $scalValue = `floatSliderButtonGrp -q -v scaleSlider`;
+float $pivot;
+float $keyValue[];
+float $keyIndex[];
+float $factor;
+float $value;
+float $range;
+float $rangeFactor;
+int $damping = `checkBox -q -v dampCheck`;
+int $reverseDamp =`checkBox -q -v reverseDamp`;
+int $t;
+
+bufferCurve -animation keys -swap;
+bufferCurve -animation keys -overwrite true;
+
+	for ($j=0; $j<size($keyAttr);$j++){
+
+	$keyValue=(`keyframe -q -sl -vc $keyAttr[$j]`);
+	$keyIndex=(`keyframe -q -sl -tc $keyAttr[$j]`);
+	
+		if (size ($keyIndex)!=1){
+		$pivot = $keyValue[size($keyValue)-1];
+		$range = $keyIndex[size($keyIndex)-1]-$keyIndex[0];
+		$factor=(1.0/($range));
+		$rangeFactor=$keyIndex[size($keyIndex)-1]-$keyIndex[size($keyIndex)-2];
+		$t=($range);	
+			for ($i=0; $i<$range+1; $i++){
+				if ($damping == 1){
+					if ($reverseDamp ==1){
+					$value=($factor*$i)+($factor*$t*$scalValue);
+					}
+					else{
+					$value=($factor*$t)+($factor*$i*$scalValue)+($rangeFactor*$factor*($scalValue-1));
+					}
+				}
+				else{
+				$value=$scalValue;
+				}		
+			scaleKey -t ($keyIndex[0]+$i) -vs $value -vp $pivot $keyAttr[$j];
+			$t-=1;
+			}
+		}
+	}
+}

@@ -1,0 +1,874 @@
+//LTB: source FBI_shaderLibrary;FBI_shaderLibrary("F:\\\\__ressources\\\\__3D\\\\bazuka_6in1_compatible_with_FBI_shaderLibrary","") 
+//FullBlownImages - Shader Library
+//Author: Oliver Markowski - oliver@fullblownimages.com
+//August 2009
+//Please send your feedback, feature requests or any bug you find including your scene to the email adress above!
+//
+
+
+global proc FBI_shaderLibrary(string $newShaderLibPath,string $dummy) {
+	
+	trace ("DEBUG $newShaderLibPath: "+$newShaderLibPath+"\n");
+	
+	global string $version;
+	$version="1.7.2";
+	
+	global int $FBI_shaderLibrary_isInitialized;
+	if ($FBI_shaderLibrary_isInitialized!=999)
+		source FBI_shaderLibrary_cfg;
+
+	global string $renderer,$rendererLong,$preRender,$mayaVersion;
+	
+	$rendererLong=`getAttr defaultRenderGlobals.currentRenderer`;
+	FBI_setupRenderer();
+
+	
+
+	if (`window -exists FBI_shaderLibrary_win`)
+		deleteUI -window FBI_shaderLibrary_win; //showWindow FBI_shaderLibrary_win;
+	
+	
+		
+		string	$workspace=`workspace -q -rd`;			
+		
+		global string $shaderLibPath,$scriptPath;
+		$scriptPath=`whatIs FBI_shaderLibrary`;
+		$scriptPath=`substring $scriptPath 25 (size($scriptPath)-21)`;	
+		
+		if ($newShaderLibPath=="")
+			$newShaderLibPath=$shaderLibPath;
+		else
+			$shaderLibPath=$newShaderLibPath;			
+		
+		//$newShaderLibPath+="/";
+		
+		string	$shaders[]=`getFileList -folder ($newShaderLibPath+"/") -filespec ("*.mb")`,
+				$shadersAscii[]=`getFileList -folder ($newShaderLibPath+"/") -filespec ("*.ma")`,
+				$directories[]; // OLD SCHOOL $directories[]=`getFileList -folder ($newShaderLibPath+"/") -filespec ("*.")`;
+		
+		//GET DIRECTORIES ON LINUX AND MAC AS WELL - thanks to richard wardlow for the code
+		$tmpdirs = `getFileList -folder ($newShaderLibPath+"/") -filespec ("*")`;
+		int $count = 0;
+		for($dirs in $tmpdirs) {
+					string $tmpmap = `dirmap -cd $newShaderLibPath`;
+					if(`filetest -d ( $tmpmap + "/" + $dirs)` == 1) {
+								$directories[$count] = $dirs;
+								$count++;
+					}
+		}
+		// END GET DIRECTORIES
+		
+		appendStringArray($shaders, $shadersAscii, size($shadersAscii));
+		
+		global string	$version;
+		window -title ("Shader Library "+$version+" by Oliver Markowski - www.fullblownimages.com") -widthHeight 1150 750 FBI_shaderLibrary_win;
+		
+		
+		string $form = `formLayout -numberOfDivisions 100`;	
+			
+			
+			text -w 120 -al "right" -l "Shader Library Path " slp_label;
+			/*textField	-text $newShaderLibPath
+						-cc ("string $tmp=`textField -q -text slp_textField`; $tmp=`substituteAllString $tmp \"\\\\\" \"/\"`;FBI_shaderLibrary($tmp,\"\")")						
+						slp_textField;
+			*/
+			
+			textField	-text $newShaderLibPath
+						-cc ("warning \"direct changes to the path are not supported anymore, because they cause crashes on maya 2011. please use BROWSE\"")						
+						slp_textField;
+			
+			
+			button	-w 50 
+					-l "Browse" 
+					-c "fileBrowserDialog -fc \"FBI_shaderLibrary\" -m 4 -om \"import\" -an \"Set ShaderLibrary Path\""
+					slp_button;
+			
+			
+			//text -w 260 -al "center" -l ("Current Renderer: "+$rendererLong) renderInfo;
+			optionMenuGrp -label "Current Renderer" -cc ("global string $rendererLong;$rendererLong=`optionMenuGrp -q -v renderInfo`;FBI_setupRenderer();print $rendererLong;setCurrentRenderer $rendererLong;") renderInfo;
+				for ($currentRenderer in `renderer -q -ava`)
+					menuItem -label $currentRenderer;
+			optionMenuGrp -e -v $rendererLong renderInfo;
+
+			text -w 50 -al "left" -l ("Options:") optionBlock_label;
+			
+			global int $promtRename;
+			checkBox -l "prompt to rename" -en 1 -v $promtRename -cc "global int $promtRename;$promtRename=`checkBox -q -v promptRename`;" promptRename;
+			
+			global int $autoAssign;
+			checkBox -l "auto assign on import" -en 1 -v $autoAssign -cc "global int $autoAssign;$autoAssign=`checkBox -q -v autoAssign`;" autoAssign;
+
+			global int $copyTextures;
+			checkBox -l "copy textures on import" -en 1 -v $copyTextures -cc "global int $copyTextures;$copyTextures=`checkBox -q -v copyTextures`;" copyTextures;
+			
+			global int $confirmDelete;
+			checkBox -l "confirm delete" -en 1 -v $confirmDelete -cc "global int $confirmDelete;$confirmDelete=`checkBox -q -v confirmDelete`;" confirmDelete;
+
+			global string $thumbsize;
+			optionMenuGrp -w 120 -label "Thumbsize" -cw2 60 50 -cl2 "left" "left" -cc ("global string $thumbsize;$thumbsize=`optionMenuGrp -q -v thumbsize`; ") thumbsize;  //FBI_update(\""+$shaderLibPath+"\");
+				menuItem -label "384";
+				menuItem -label "256";
+				menuItem -label "128";
+				menuItem -label "64";
+			optionMenuGrp -e -v $thumbsize thumbsize;
+
+			button	-l "PAYPAL DONATE"  -c "FBI_donate()" donateButton;
+			
+			button -bgc 0.5 1 0.5 -l "Export selected shader here..." -c "FBI_exportShaderWindow()" exportButton;
+		
+			button -bgc 1 1 0.5 -l "Update current directory" -c ("FBI_update(\""+$newShaderLibPath+"\")") updateButton; 
+				
+				
+			
+			scrollLayout -w 285	dirBrowser;
+				columnLayout;
+					//GET PARENT DIR
+					string $tmpPath[],$parentDir="";
+					tokenize $newShaderLibPath "/\\" $tmpPath;
+					for ($i=0;$i<(size($tmpPath)-1);$i++)
+						$parentDir+=$tmpPath[$i]+"/";
+					if (!`gmatch $parentDir "*:*"`)
+						$parentDir=("//"+$parentDir);
+					
+					//SORT ALPHABETICALLY
+					$directories=sort($directories);
+					
+					
+					
+					//BUILD ALL THE BUTTONS
+						button -w 258 -l "CREATE NEW FOLDER" -c ("FBI_makeDir()");
+						button -bgc .5 1 1 -w 258 -l ".. (parent dir)" -c ("FBI_shaderLibrary(\""+$parentDir+"\",\"\")");
+						for ($j=0;$j<size($directories);$j++)	{
+							//HIGHLIGHT DIRECTORIES CONTAINING THE WORD SHADER
+							$highlighter=tolower($directories[$j]); 
+							if (`gmatch $highlighter "*shader*"`)
+								button -bgc 0.5 1 0.5 -w 258 -l $directories[$j] -c ("FBI_shaderLibrary(\""+$newShaderLibPath+"/"+$directories[$j]+"\",\"\")");
+							else
+								button -w 258 -l $directories[$j] -c ("FBI_shaderLibrary(\""+$newShaderLibPath+"/"+$directories[$j]+"\",\"\")");
+						
+						}
+					
+				setParent ..;
+			setParent ..;
+			
+			$shaders=sort($shaders);
+			
+			scrollLayout	shaderBrowser;	
+				columnLayout;
+					//START PROGRESSBAR
+					global string $gMainProgressBar;
+					if (size($shaders))
+						progressBar -edit    -beginProgress    -isInterruptable true    -status "Reading directory..."    -maxValue `size($shaders)`    $gMainProgressBar;
+					
+					global string $thumbsize;
+					int $thumbSizeInt=$thumbsize;
+					
+					
+					for ($i=0;$i<(size($shaders)/3+1);$i++)     {          
+						int $numRows;
+						if ($thumbSizeInt==384) {
+							$numRows=2;
+							rowLayout	-numberOfColumns $numRows -columnWidth2 412 413 -adjustableColumn 2 -columnAttach 1 "both"  0 -columnAttach 2 "both"  0;
+						}
+						if ($thumbSizeInt==256) {
+							$numRows=3;
+							rowLayout	-numberOfColumns $numRows -columnWidth3 275 275 275 -adjustableColumn 2 -columnAttach 1 "both"  0 -columnAttach 2 "both"  0 -columnAttach 3 "both"  0;
+						}
+						if ($thumbSizeInt==128) {
+							$numRows=6;
+							rowLayout	-numberOfColumns $numRows -cw 1 135 -cw 2 135 -cw 3 135 -cw 4 135 -cw 5 135 -cw 6 135;
+						}
+						if ($thumbSizeInt==64) {
+							$numRows=12;
+							rowLayout	-numberOfColumns $numRows -columnWidth3 275 275 275 -adjustableColumn 2 -columnAttach 1 "both"  0 -columnAttach 2 "both"  0 -columnAttach 3 "both"  0;
+						}
+					   
+						int $newMax=$i * $numRows + $numRows;
+						if ($newMax>size($shaders))
+									$newMax=size($shaders);
+						
+						
+						
+						for ($j=$i * $numRows;$j<$newMax;$j++)     {           //size($shaders)
+							columnLayout -h ($thumbSizeInt + 50);
+								image -w $thumbSizeInt -h $thumbSizeInt -image ($newShaderLibPath+"/"+$shaders[$j]+".png");
+									popupMenu;										
+										//before maxwell
+										//$cmd=("Render -r "+$renderer+" -preRender \"source FBI_shaderLibrary;FBI_generateShaderPreview(\\\""+($newShaderLibPath+"/"+$shaders[$j])+"\\\")\" -proj \""+$scriptPath+"\\FBI_shaderLibrary\" \""+$scriptPath+"FBI_shaderLibrary/renderShaderPreview_"+$renderer+"_"+$mayaVersion+".ma\"");
+										//OLD  - - $cmd=("Render -r "+$renderer+" "+$preRender+" \"source FBI_shaderLibrary;FBI_generateShaderPreview(\\\""+($newShaderLibPath+"/"+$shaders[$j])+"\\\")\" -proj \""+$scriptPath+"\\FBI_shaderLibrary\" \""+$scriptPath+"FBI_shaderLibrary/renderShaderPreview_"+$renderer+"_"+$mayaVersion+".ma\"");
+										$cmd=(" \"source FBI_shaderLibrary;FBI_generateShaderPreview(\\\""+($newShaderLibPath+"/"+$shaders[$j])+"\\\")\" -proj \""+$scriptPath+"\\FBI_shaderLibrary\" \""+$scriptPath+"FBI_shaderLibrary/renderShaderPreview_");
+										$cmd=`encodeString $cmd`;
+										
+										//OLD  - - menuItem -l "Refresh Preview" -c ("global string $renderer,$preRender; print ($renderer+\"\\n\");print ($preRender+\"\\n\");string $logi=`system (\""+$cmd+"\")`;print $logi;print (\""+$cmd+"\");");
+										//menuItem -l "Refresh Preview" -c ("global string $renderer,$preRender;         string $logi=`system (\"Render -r "+$renderer+" "+$preRender+" "+$cmd+"\")`;                   print $logi;    print (\"Render -r "+$renderer+" "+$preRender+" "+$cmd+"\");");
+										menuItem -l "Refresh Preview" -c ("FBI_refreshPreview(\""+$cmd+"\")");
+										
+										$cmd=("maya -batch -command \"source FBI_shaderLibrary_cfg;source FBI_shaderLibrary;FBI_uploadShader\" -file \""+($newShaderLibPath+"/"+$shaders[$j])+"\"");
+										$cmd=`encodeString $cmd`;                                                                                          
+										menuItem -l "SHARE IT!" -c ("FBI_disclaimer;print (\""+$cmd+"\");exec (\""+$cmd+"\");print \"THANK YOU VERY MUCH FOR SHARING!!!\"");;
+								
+										menuItem -d 1; //DIVIDER
+										
+										menuItem -l "Delete" -c ("string $theAnswerIs=\"No\";if (!`checkBox -q -v confirmDelete`) $theAnswerIs=\"Yes\";if ($theAnswerIs==\"No\") $theAnswerIs=`confirmDialog -title Confirm -button Yes -button No -defaultButton Yes -message \"Really delete?\"`; if ($theAnswerIs==\"Yes\") {sysFile -del \""+($newShaderLibPath+"/"+$shaders[$j])+".png\";sysFile -del \""+($newShaderLibPath+"/"+$shaders[$j])+"\";FBI_shaderLibrary(\""+$newShaderLibPath+"\",\"\");}");;
+								
+								text     -w  $thumbSizeInt  -l $shaders[$j] -al "center";
+								//rowColumnLayout          -numberOfColumns 3 -cw 1 75 -cw 2 106 -cw 3 75;
+								button -w $thumbSizeInt -l "Import" -c ("FBI_importShader(\""+($newShaderLibPath+"/"+$shaders[$j])+"\")");                                                                                                       					
+								//			button -w 85 -l "Refresh Preview" -c ("print (\""+$cmd+"\");exec (\""+$cmd+"\");print \"\\n\";");
+								//			button -w 85 -l "Delete" -c ("string $theAnswerIs=\"No\";if (!`checkBox -q -v confirmDelete`) $theAnswerIs=\"Yes\";if ($theAnswerIs==\"No\") $theAnswerIs=`confirmDialog -title Confirm -button Yes -button No -defaultButton Yes -message \"Really delete?\"`; if ($theAnswerIs==\"Yes\") {sysFile -del \""+($newShaderLibPath+"/"+$shaders[$j])+".png\";sysFile -del \""+($newShaderLibPath+"/"+$shaders[$j])+"\";FBI_shaderLibrary(\""+$newShaderLibPath+"\",\"\");}");
+								//setParent ..;
+								//columnLayout;
+								//			$cmd=("mayabatch -command \"source FBI_shaderLibrary;FBI_uploadShader\" -file \""+($newShaderLibPath+"/"+$shaders[$j])+"\"");
+								//			$cmd=`encodeString $cmd`;                                                                                          
+								//			button -w 266 -l "SHARE IT!" -c ("FBI_disclaimer;print (\""+$cmd+"\");exec (\""+$cmd+"\");print \"THANK YOU VERY MUCH FOR SHARING!!!\"");
+								//setParent ..;
+							setParent ..;                 
+						}
+											
+						setParent ..;
+						if(`progressBar -query -isCancelled $gMainProgressBar`)
+							break;
+						progressBar -edit -step 3 $gMainProgressBar;
+					}
+					progressBar -edit    -endProgress    $gMainProgressBar;
+				setParent ..;
+			setParent ..;	
+		//setParent ..;
+				
+		
+
+		
+		
+		formLayout	-edit
+			    -attachForm     slp_label	"top"		3
+			    -attachForm     slp_label	"left"		0
+				-attachNone     slp_label	"right"		
+		        -attachNone 	slp_label	"bottom"	
+
+				-attachForm     slp_textField	"top"		0
+			    -attachControl  slp_textField	"left"		0 slp_label
+				-attachControl  slp_textField	"right"		0 slp_button
+		        -attachNone 	slp_textField	"bottom"	
+
+				-attachForm     slp_button	"top"		0
+			    -attachNone     slp_button	"left"	
+				-attachForm     slp_button	"right"		0
+		        -attachNone 	slp_button	"bottom"	
+				
+				
+				-attachControl  renderInfo	"top"		5	slp_button
+			    -attachForm     renderInfo	"left"		0
+				-attachNone     renderInfo	"right"		
+		        -attachNone 	renderInfo	"bottom"	
+
+				-attachControl  optionBlock_label	"top"		3	slp_button
+			    -attachControl  optionBlock_label	"left"		35	renderInfo
+				-attachNone     optionBlock_label	"right"		
+		        -attachNone 	optionBlock_label	"bottom"	
+
+				
+				-attachControl  promptRename	"top"		3	slp_button
+			    -attachControl  promptRename	"left"		0	optionBlock_label
+				-attachNone     promptRename	"right"		
+		        -attachNone 	promptRename	"bottom"				
+				
+				-attachControl  copyTextures	"top"		3	slp_button
+			    -attachControl  copyTextures	"left"		0	promptRename
+				-attachNone     copyTextures	"right"		
+		        -attachNone 	copyTextures	"bottom"
+				
+				
+				-attachControl  autoAssign	"top"		3	slp_button
+			    -attachControl  autoAssign	"left"		0	copyTextures
+				-attachNone    autoAssign	"right"		
+		        -attachNone 	autoAssign	"bottom"				
+				
+				-attachControl	confirmDelete	"top"		3	slp_button
+				-attachControl	confirmDelete	"left"		0	autoAssign
+				-attachNone	confirmDelete	"right"		
+				-attachNone	confirmDelete	"bottom"	
+
+				-attachControl	thumbsize	"top"		3	slp_button
+			    	-attachControl	thumbsize	"left"		0	confirmDelete
+				-attachNone	thumbsize	"right"
+		        	-attachNone	thumbsize	"bottom"	
+
+				-attachControl	donateButton	"top"		3	slp_button
+			    	-attachControl	donateButton	"left"		0	thumbsize		
+				-attachForm	donateButton	"right"		0
+		        	-attachNone	donateButton	"bottom"	
+
+				-attachControl  dirBrowser		"top" 		8	renderInfo				
+				-attachForm		dirBrowser		"bottom" 	0	
+				-attachForm     dirBrowser		"left"		0
+				-attachNone		dirBrowser		"right"		
+				
+				-attachControl  exportButton		"top" 		10	optionBlock_label				
+				-attachForm	exportButton		"right" 	0
+				-attachControl  exportButton		"left"		0	dirBrowser
+				-attachNone 	exportButton		"bottom"	
+				
+				
+				-attachControl  updateButton		"top"		0	exportButton	
+				-attachNone	updateButton		"bottom"
+				-attachControl  updateButton		"left"		0	dirBrowser
+				-attachForm     updateButton		"right"		0			    				
+				
+				
+				-attachControl  shaderBrowser		"top" 		0	updateButton
+				-attachForm		shaderBrowser		"bottom" 	0	
+				-attachControl	shaderBrowser		"left"		0	dirBrowser
+				-attachForm     shaderBrowser		"right"		0			    
+				
+				$form;
+				
+		showWindow FBI_shaderLibrary_win;
+		
+	
+}
+
+
+
+global proc FBI_exportShaderWindow() {
+	
+	string	$sel[]=`ls -sl -type transform`,
+			$shadingGroup[];
+	
+	//SWITCH TO MASTERLAYER
+	editRenderLayerGlobals -crl defaultRenderLayer;
+	
+	if (size($sel)) { // FIND SHAPENODES IF A TRANSFORM IS SELECTED
+		$sel=`listRelatives -type shape $sel`;		
+	}
+	else {  // GET ALL SELECTED OBJECTS IN CASE A SHAPE OR SHADER IS SELECTED
+		$sel=`ls -sl -type shadingEngine` ;
+		if (size($sel)) { //IF SHADINGGROUP IS FOUND 
+			$shadingGroup=`ls -sl -type shadingEngine`;			
+			print c;
+		}		
+	}
+	
+	if (!size($shadingGroup)) { // IF NOTHING IS FOUND;THERE MUST BE A SHADER OR SHAPE SELECTED
+			if (!size($sel))
+				$sel=`ls -sl`;
+			string $shadingGroupTmp[]=`listConnections -type shadingEngine $sel`;		// MAKE SURE WE ONLY GET 1 SHADINGGROUP RETURNED EVEN IF A SHADER IS CONNECTED TO MULTIPLE SGs
+			if (size($shadingGroupTmp))
+				$shadingGroup[0]=$shadingGroupTmp[0];
+			print a;
+		}
+	
+	if (!size($shadingGroup)) { // IF STILL NOTHING IS THERE THEN ASSUME A SHADER IS SELECTED WITHOUT BEING CONNECTED TO A SHADINGROUP - CREATE AN SG 		
+		//string $newShadingGroup=`createNode -n ($sel[0]+"_SG") shadingEngine`;
+		string $newShadingGroup=`sets -em -n ($sel[0]+"_SG") -r 1`;
+		$shadingGroup[0]=$newShadingGroup;
+		connectAttr -f ($sel[0]+".outColor") ($shadingGroup[0]+".surfaceShader");
+		
+		print b;
+	}
+	
+	//make sure we don't export materials with multiple connections to one SG more than once
+	$shadingGroup=stringArrayRemoveDuplicates($shadingGroup);
+	
+	global int $multiexport,$confirmed,$overWriteTexYesToAll,$overWriteTexNoToAll;
+	if (size($shadingGroup)>1) {
+		$multiexport=1;
+		if (!$confirmed)
+			confirmDialog -title "Confirm" -message ("Multiple shaders are being exported...this will block Maya until all previews are rendered in the background!\nNo renaming possible.");
+		$confirmed=1;
+		
+		for ($current in $shadingGroup) {		
+			FBI_exportShader($current);
+		}
+	}
+	else {
+		$multiexport=0;
+
+		if (`checkBox -q -v promptRename`) {
+			if (`window -exists FBI_exportShader_win`)
+				deleteUI -window  "FBI_exportShader_win";
+				global string $shaderName;
+				$shaderName=$shadingGroup[0];
+				window -title "Edit Shadername?" -widthHeight 320 60 FBI_exportShader_win;
+				columnLayout;
+					textFieldButtonGrp -text $shaderName -buttonLabel "Export Now!" -bc "global string $shaderName;string $renamedSG=`textFieldButtonGrp -q -text exportButton`,$renameResult=`rename $shaderName $renamedSG`;deleteUI -window FBI_exportShader_win;FBI_exportShader($renameResult);" exportButton;
+				showWindow FBI_exportShader_win;
+		}
+		else
+			FBI_exportShader($shadingGroup[0]);
+	}
+		
+	
+}
+
+global proc FBI_exportShader(string $shadingGroup) {
+	
+	global int $multiexport;
+	global string $shaderLibPath;
+	if ($shaderLibPath=="")
+		$shaderLibPath=(`workspace -q -rd` + "shaders");
+	
+	string 	$tagName=$shadingGroup,
+			$buffer[],
+			$tmpNamespace=`tokenize $tagName ":" $buffer`,			
+			$fileName=($shaderLibPath+"/"+$tagName+".shd");
+	
+			
+	$tagName=$buffer[size($buffer)-1];
+	
+	
+	
+	//FIND AND COPY TEXTURES!!!
+	
+	string	$allConnectedNodes[]=FBI_findAllConnectedNodes({$shadingGroup}),
+			$connectedFileNodes[]=`ls -type file $allConnectedNodes`,
+			$originalFileName[];
+	
+	//FIND TEXUREPATH
+	string $destDir = FBI_getGlobalTexturePath($shaderLibPath);
+	if ($destDir == "")
+		if (`confirmDialog -title "Confirm" -message ("No global textures directory found.\nCreate textures-subfolder for this specific shader here?") -button "Yes" -button "No" -defaultButton "No" -cancelButton "No" -dismissString "No"`=="Yes")
+			$destDir = $shaderLibPath+"/."+$tagName+"_textures";
+		else
+			error "Canceled...";
+	sysFile -makeDir $destDir;
+	
+	//FIND ALL TEXURES AND REMEMBER THEIR ORIGINAL NAME TO RESTORE IT LATER
+	clear $originalFileName;
+	for ($i=0;$i<size($connectedFileNodes);$i++) {
+		$originalFileName[$i]=`getAttr ($connectedFileNodes[$i]+".fileTextureName")`;		
+	}
+	
+	//COPY TEXTURES
+	string $sourceimages=`workspace -q -rte sourceImages`,
+			$alreadyCopied[];
+	//if path is relative add project folder as a prefix - do nothing if absoulte
+	if (!`gmatch $sourceimages "//*"` || !`gmatch $sourceimages "*:*"` )
+		$sourceimages=(`workspace -q -rd`+$sourceimages);
+	
+	clear $alreadyCopied;
+	for ($currentFileNode in $connectedFileNodes) {			
+		string	$newFileName,
+				$currentFileName=`getAttr ($currentFileNode+".fileTextureName")`;
+		//CHECK IF FILE IS SOMEWHERE INSIDE THE PROJECTS SOURCEIMAGES FOLDER
+		print ("DEBUG sourceimages: "+$sourceimages+"\n");
+		if (`gmatch $currentFileName ($sourceimages+"*")`) {
+			$newFileName=FBI_copyTextures($currentFileName, $sourceimages, $destDir, 1 , 1);
+		}		
+		else {
+			tokenize $currentFileName "/\\" $buffer;
+			$newFileName=$destDir+"/"+$buffer[size($buffer)-1];
+		} 
+		
+		setAttr -type "string" ($currentFileNode+".fileTextureName") $newFileName;
+		
+		if (!stringArrayContains($newFileName , $alreadyCopied)) { //CHECK IF WE HAVE ALREADY COPIED THE SAME FILE ON ANOTHER FILENODE
+			global int $overWriteTexYesToAll,$overWriteTexNoToAll;
+			if (`filetest -r $newFileName` && $overWriteTexYesToAll==0) {				
+				if ($overWriteTexNoToAll==0) {
+					string $result=`confirmDialog -title "Confirm" -message ("Overwrite "+$newFileName+" ?") -button "Yes" -button "No" -button "Yes to all" -button "No to all" -defaultButton "No" -cancelButton "No" -dismissString "No"`;
+					if ($result=="Yes to all") {
+						$overWriteTexYesToAll=1;
+						$result="Yes";
+					}
+
+					if ($result=="Yes") {
+						sysFile -copy $newFileName $currentFileName;
+						$alreadyCopied[size($alreadyCopied)]=$newFileName;
+					}
+
+					if ($result=="No to all") {
+						$overWriteTexNoToAll=1;
+					
+					}
+				}
+			}
+			else {		
+				sysFile -copy $newFileName $currentFileName;
+				$alreadyCopied[size($alreadyCopied)]=$newFileName;
+			}
+		}		
+	}
+
+	
+	//DO THE EXPORT
+	if (!`objExists ("exportSphere_"+$tagName)`)		
+		sphere -n ("exportSphere_"+$tagName);
+        
+        //LITTLE HACK - catch is not really necessary
+	sets -e -forceElement $shadingGroup ("exportSphere_"+$tagName);	
+	select -r ("exportSphere_"+$tagName);
+	
+	
+	
+	string	$workspace=`workspace -q -rd`,
+			$oldVersion[]=`getFileList -folder ($shaderLibPath+"/") -filespec ($tagName+".*")`,			
+			$exportedFile=($tagName+"."+(size($oldVersion)+1)),
+			$result;
+		
+	//check for unknkown nodes and decide if we export ascii or binary
+	string $unknown[]=`ls -type unknown`;
+	if (size($unknown)) {
+		string $currentExt=`file -q -exn`;
+		$currentExt=`substring  $currentExt (size($currentExt)-1) (size($currentExt))`;
+		if ($currentExt=="mb")
+			$result=`file -op "v=0" -typ "mayaBinary" -es ($shaderLibPath+"/"+$exportedFile+".mb")`;
+		else 
+			$result=`file -op "v=0" -typ "mayaAscii" -es ($shaderLibPath+"/"+$exportedFile+".ma")`;
+	}
+	else
+		$result=`file -op "v=0" -typ "mayaAscii" -es ($shaderLibPath+"/"+$exportedFile+".ma")`;
+	
+	delete ("exportSphere_"+$tagName);	
+
+	//RESET FILENAMES IN FILE-NODEs
+	for ($i=0;$i<size($connectedFileNodes);$i++)
+		setAttr -type "string" ($connectedFileNodes[$i]+".fileTextureName") $originalFileName[$i];
+	
+	global string	$scriptPath,
+				$renderer,
+				$preRender,
+				$mayaVersion;
+
+	//string $cmd=("Render -r "+$renderer+" -preRender \"source FBI_shaderLibrary;FBI_generateShaderPreview(\\\""+$result+"\\\")\" -proj \""+$scriptPath+"\\FBI_shaderLibrary\" \""+$scriptPath+"/FBI_shaderLibrary/renderShaderPreview_"+$renderer+"_"+$mayaVersion+".ma\"");
+	string $cmd=("Render -r "+$renderer+" "+$preRender+" \"source FBI_shaderLibrary;FBI_generateShaderPreview(\\\""+$result+"\\\")\" -proj \""+$scriptPath+"\\FBI_shaderLibrary\" \""+$scriptPath+"/FBI_shaderLibrary/renderShaderPreview_"+$renderer+"_"+$mayaVersion+".ma\"");
+	
+	
+	if ($multiexport) {
+		print ($cmd+"\n");		
+		system($cmd);	
+	}
+	else {
+		print ($cmd+"\n");		
+		exec($cmd);	
+	}
+	
+
+}
+
+global proc FBI_generateShaderPreview(string $fileName) {
+
+	//optionVar -intValue fileOpenIgnoreVersion true; //DOES NOT REALLY WORK WITH RENDER.EXE
+	//file -f  -ignoreVersion  -o `file -q -exn`; // TRICK THE RENDER COMMAND TO FINALLY UNDERSTAND THAT IT SHOULD FUCKIN IGNORE THE MAYA VERSION
+	file -r -gl -loadReferenceDepth "all" -namespace "SHADER" -options "v=0" $fileName;	
+	
+	//RELINK TEXTURENAMES!!!
+	string	$baseName=basenameEx($fileName),
+			$connectedFileNodes[]=`ls -type file`;
+
+	//SET JPEG COMPRESSION!
+	putenv "AW_JPEG_Q_FACTOR" "90";
+	
+	FBI_relinkFileNodes($connectedFileNodes,$fileName);
+	
+	string $sel[]=`ls -type transform`;
+	
+	for ($current in $sel)
+		if (`gmatch $current "SHADER:exportSphere*"`) {
+			setAttr ($current+".visibility") 0;
+			
+			
+			string $shape[]=`listRelatives -f -s $current`,
+				$shader[]=`listConnections -type shadingEngine $shape`;
+			
+			sets -e -forceElement $shader[0] previewObject;
+			setAttr -type "string" defaultRenderGlobals.imageFilePrefix ($fileName);			
+			
+			if (`objExists vraySettings`)
+				setAttr -type "string" vraySettings.fileNamePrefix ($fileName);
+			print $shader;
+		}
+}
+
+
+global proc FBI_importShader(string $fileName) {
+
+	string	$shadingGroup[],$sel[]=`ls -sl` ;
+
+	global string $shaderLibPath;
+		if ($shaderLibPath=="")
+			$shaderLibPath=(`workspace -q -rd` + "shaders");	
+
+	if ($fileName=="")
+		$fileName = `fileDialog -m 0 -directoryMask ($shaderLibPath+"/*.*")`;
+			
+	string		$baseName=basenameEx($fileName),
+			$buffer[];
+
+	if (size($fileName))
+		file -import -iv -ra true -rpr "shaderImport" -options "v=0" -loadReferenceDepth "none" $fileName;
+	else
+		error "User abort!";
+
+	tokenize $baseName "." $buffer; //REMOVE SHADERVERSION
+	$baseName=$buffer[0];
+
+	string $allNodes[] = (`listHistory -f true ("shaderImport_exportSphere_"+$baseName)` );
+	string $node = "";
+	
+	global int $autoAssign;
+	
+	for ($node in $allNodes) 
+		if(`nodeType $node` == "shadingEngine") {
+			if ($autoAssign && size($sel)) {
+				sets -e -forceElement $node $sel;
+				print "Auto assigned Material";
+			}
+			else
+				select -r -ne $node;
+			break;
+		}
+	//RELINK TEXTURENAMES!!!
+	$shadingGroup[0]=$node;
+	string	$allConnectedNodes[]=FBI_findAllConnectedNodes($shadingGroup),
+			$connectedFileNodes[]=`ls -type file $allConnectedNodes`,
+			$originalFileName[];
+		
+	FBI_relinkFileNodes($connectedFileNodes,$fileName);
+	
+	if (`checkBox -q -v copyTextures`) { //COPY TEXTURES TO PROJECTS SOURCEIMAGES FOLDER
+		string	$globalTextureDir=FBI_getGlobalTexturePath($fileName),
+				$sourceimages=`workspace -q -rte sourceImages`,
+				$alreadyCopied[];
+				
+		//if path is relative add project folder as a prefix - do nothing if absoulte
+		if (!`gmatch $sourceimages "//*"` || !`gmatch $sourceimages "*:*"` )
+			$sourceimages=(`workspace -q -rd`+$sourceimages);		
+		clear $alreadyCopied;
+		
+		for ($currentFile in $connectedFileNodes) {
+			string	$texFileName=`getAttr ($currentFile+".fileTextureName")`,
+					$newFileName;
+			if (!stringArrayContains($texFileName , $alreadyCopied)) { //CHECK IF WE HAVE ALREADY COPIED THE SAME FILE ON ANOTHER FILENODE
+				$newFileName=FBI_copyTextures($texFileName,	$globalTextureDir, $sourceimages, 0 , 0); //PERFORM COPY
+				$alreadyCopied[size($alreadyCopied)]=$texFileName;
+			}
+			else
+				$newFileName=FBI_copyTextures($texFileName,	$globalTextureDir, $sourceimages, 1 , 0); //RETURN NAME BUT DON'T CREATE FOLDER
+			
+			setAttr -type "string" ($currentFile+".fileTextureName") $newFileName;
+		}
+	}		
+	
+	//CLEANUP NODENAMES
+	delete ("shaderImport_exportSphere_"+$baseName);
+	searchReplaceNames "shaderImport_" " " "all";
+}
+
+global proc string[] FBI_findAllConnectedNodes(string $nodes[]) {
+	string $allConnectedNodes[]=`listConnections -s 1 -d 0 $nodes`;
+	
+	for ($i=0;$i<size($allConnectedNodes);$i++) {
+		string $newFoundNodes[]=`listConnections -s 1 -d 0 $allConnectedNodes[$i]`;
+		appendStringArray($allConnectedNodes, $newFoundNodes, size($newFoundNodes));
+		$allConnectedNodes=stringArrayRemoveDuplicates($allConnectedNodes);
+	}
+	
+	return $allConnectedNodes;
+}
+
+global proc FBI_convertFileVersion(string $fileName) {
+string $file[]=`getFileList -folder ($fileName+"/") -filespec ("*.mb")`,
+		$recent=`file -force -save`;
+
+if (`confirmDialog -title "Confirm" -message ("Really convert all shaders in here?") -button "Yes" -button "No" -defaultButton "No" -cancelButton "No" -dismissString "No"`=="No")
+			error "Idiot!";
+		
+for ($current in $file) {	
+	file -options "v=0"  -esn false  -ignoreVersion  -typ "mayaBinary" -o ($fileName+"/"+$current);
+	file -force -save;
+	}
+	
+file -options "v=0"  -esn false  -ignoreVersion  -typ "mayaBinary" -o $recent;
+}
+
+
+global proc string FBI_getGlobalTexturePath(string $globalTextureDir) {	
+	string $buffer[];
+	int $numSteps=`tokenize $globalTextureDir "/\\" $buffer`;	//HOW MANY DIRECTORIES MUST WE TRAVEL
+	for ($i=0;$i<$numSteps;$i++) {		
+		if (`filetest -d ($globalTextureDir+"/TEXTURES")`) {
+			$globalTextureDir+="/TEXTURES/";
+			return $globalTextureDir;
+		}
+		$globalTextureDir=dirname($globalTextureDir);
+	}
+	return "";
+}
+
+global proc int FBI_relinkFileNodes(string $connectedFileNodes[], string $fileName) {	
+
+	string	$buffer[],
+			$newTexFileName,			
+			$baseName=basenameEx($fileName),
+			$globalTextureDir=FBI_getGlobalTexturePath($fileName);
+	
+	int $failedTextures=0;
+	
+	tokenize $baseName "." $buffer; //REMOVE SHADERVERSION
+	$baseName=$buffer[0];
+	string $texturePath=(dirname($fileName)+"/."+$baseName+"_textures/");
+	print ("DEBUG - GLOBAL_TEX_DIR: "+$globalTextureDir+" - RELATIVE_TEX_DIR: "+$texturePath+"\n");
+	for ($i=0;$i<size($connectedFileNodes);$i++) {
+		string $texFileName=`getAttr ($connectedFileNodes[$i]+".fileTextureName")`;
+		print ("DEBUG $texFileName before: "+$texFileName+"\n");
+		int $found=0;
+		if (`filetest -r $texFileName`==0) {
+			tokenize $texFileName "/\\" $buffer;						
+			$newTexFileName=($texturePath+$buffer[size($buffer)-1]);
+			//check for texture in relative path
+			if (`filetest -r $newTexFileName`==0) { 
+				//IF NOT FOUND -> CHECK IN GLOBAL PATH - AND ALSO CHECK POSSIBLE SUB-DIRECTORIES FROM THE ORIGINAL FILENAME
+				string $suffix="";
+				for ($dirIndex=size($buffer)-1;$dirIndex>=0;$dirIndex--) {
+					$suffix=("/"+$buffer[$dirIndex]+$suffix);
+					$newTexFileName=($globalTextureDir+$suffix);
+					print ("DEBUG $newTexFileName "+$newTexFileName+"\n");
+					if (`filetest -r $newTexFileName`) {
+						setAttr -type "string" ($connectedFileNodes[$i]+".fileTextureName") $newTexFileName;							
+						$found=1;
+						break;
+					}
+				}				
+			}
+			else
+				$found=1;
+			
+			if ($found) {
+				print ("RELINKED TEXTUREPATH ON "+$connectedFileNodes[$i]+" TO: "+$newTexFileName+"\n");					
+			}
+			else {
+				warning ("COULD NOT RELINK TEXTUREPATH ON "+$connectedFileNodes[$i]);
+				$failedTextures++;
+			}
+		}
+	}
+	return $failedTextures;
+}
+
+global proc FBI_uploadShader() {
+	global string	$scriptPath;
+	string	$connectedFileNodes[]=`ls -type file`,
+			$fileName=`file -q -exn`;
+	
+	//JUST TO MAKE SURE THAT ALL TEXTURES ARE REALLY THERE
+	int $failed=FBI_relinkFileNodes($connectedFileNodes,$fileName);
+	if ($failed)
+		error ("FOUND "+$failed+" MISSING TEXTURES - PLEASE CHECK BEFORE RETRYING!");
+	else
+		python("import sys;sys.path.append( '"+$scriptPath+"FBI_shaderLibrary' );import FBI;FBI.uploadShader()");
+}
+
+
+global proc FBI_disclaimer() {
+
+	global int $FBI_agreed=0;
+
+	if (!$FBI_agreed)
+		if (`confirmDialog -title "Confirm" -message ("You may only upload textures that are free to distribute and where you have the right to distribute them. Oliver Markowski will not be responsible for any legal issues that may occur! Do you agree?") -button "Yes" -button "No" -defaultButton "No" -cancelButton "No" -dismissString "No"`=="No")
+			error("You have not agreed to the upload conditions!");
+	$FBI_agreed=1;
+	
+}
+
+global proc string FBI_copyTextures(string $currentFileName, string $sourceroot, string $targetroot, int $justReturnName, int $createFolder) {
+	// BUILD FOLDERNAME in Texturesdir AND CREATE FOLDER
+	print ("DEBUG currentFileName: "+$currentFileName+"\n");
+	print ("DEBUG sourceroot: "+$sourceroot+"\n");
+	print ("DEBUG targetroot: "+$targetroot+"\n");
+	string	$relativeName=`substring $currentFileName (size($sourceroot)+1) (size($currentFileName))`,
+			$fileBuffer[];
+	tokenize $relativeName "/" $fileBuffer;
+	print ("DEBUG relativeName: "+$relativeName+"\n");
+	$newFileName=$fileBuffer[size($fileBuffer)-1];
+	string $currentDestDir=$targetroot;
+	if (size($fileBuffer)>1)
+		$currentDestDir=($targetroot+"/"+`substring $relativeName 1 (size($relativeName)-size($newFileName))`);			
+	print ("DEBUG currentDestDir: "+$currentDestDir+"\n");
+	$newFileName=($currentDestDir+"/"+$newFileName);
+	print ("DEBUG newFileName: "+$newFileName+"\n");
+	
+	if ($createFolder || !$justReturnName)
+		sysFile -makeDir $currentDestDir;
+	
+	if (!$justReturnName) 
+		sysFile -copy $newFileName $currentFileName;
+	
+	return $newFileName;
+}
+
+
+global proc FBI_makeDir() {
+
+	if (`window -exists FBI_makeDir_win`)
+		deleteUI -window  "FBI_makeDir_win";		
+		global string $shaderLibPath;
+		window -title "Create new folder" -widthHeight 320 60 FBI_makeDir_win;
+		columnLayout;
+			textFieldButtonGrp -text "" -buttonLabel "Create Folder" -bc "$dirName=($shaderLibPath+\"/\"+`textFieldButtonGrp -q -text makeDirButton`);sysFile -md $dirName;deleteUI FBI_makeDir_win; FBI_shaderLibrary($dirName,\"\");" makeDirButton;
+		showWindow FBI_makeDir_win;
+}
+
+global proc FBI_update(string $newShaderLibPath) {
+
+	FBI_shaderLibrary($newShaderLibPath,"");
+
+}
+
+
+global proc FBI_setupRenderer() {
+
+	global string $renderer,$rendererLong,$preRender;
+	
+
+	$renderer=$rendererLong;
+	$preRender="-preRender";
+	
+	if ($rendererLong=="mentalRay")
+		$renderer="mr";
+	if ($rendererLong=="mayaSoftware")
+		$renderer="sw";
+	if ($rendererLong=="renderMan") 
+		$renderer="rman";
+	if ($rendererLong=="maxwell") 
+		$preRender="-pre"; //MAXWELL DOES NOT SUPPORT THE PRERENDER FLAG - must use -pre instead
+		
+	print ("DEBUG: "+$renderer+"\n");
+}
+
+global proc FBI_refreshPreview(string $cmd) {
+
+global string $renderer,$preRender,$mayaVersion; 
+print ($cmd+"\n");
+//$cmd=`encodeString ("Render -r "+$renderer+" "+$preRender+" "+$cmd+$renderer+"_"+$mayaVersion+".ma\"")`;
+$cmd= ("Render -r "+$renderer+" "+$preRender+" "+$cmd+$renderer+"_"+$mayaVersion+".ma\"");
+
+string $logi=`system ($cmd)`; 
+print $logi; 
+print ($cmd+"\n");
+
+}
+
+
+
+global proc FBI_donate() {
+
+string $currency = `confirmDialog -title "Thank You!" -message ("Thank you for your will to donate! \Shaderlibrary will always be free and\nyour donation will be gratefully appreciated!\n\nIf you are a company you can also get an invoice from me!\n\nIf no browser window pops up,please copy/paste the link from the script editor\n\nPlease choose a currency") -button "US Dollar" -button "Euro" -defaultButton "Euro" -cancelButton "cancel" -dismissString "cancel"`;
+string $link="https://www.paypal.com/cgi-bin/webscr?cmd=_donations&business=oliver%40fullblownimages%2ecom&lc=US&item_name=Donation%20to%20Oliver%20Markowski%20for%20his%20free%20shader%20library%20script&no_note=0&currency_code=USD&bn=PP%2dDonationsBF%3abtn_donateCC_LG%2egif%3aNonHostedGuest";
+if ($currency=="Euro")
+    $link="https://www.paypal.com/cgi-bin/webscr?cmd=_donations&business=oliver%40fullblownimages%2ecom&lc=US&item_name=Donation%20to%20Oliver%20Markowski%20for%20his%20free%20shader%20library%20script&no_note=0&currency_code=EUR&bn=PP%2dDonationsBF%3abtn_donateCC_LG%2egif%3aNonHostedGuest";
+
+string $os=`about -os`;
+if ($os=="mac" || `gmatch $os "linux*"`)
+    exec("open \""+$link+"\"");
+else
+    exec ("explorer \"" + $link + "\"");
+print "Link for donation:\n";
+print $link;
+}
+
+
+
+
+
+
+

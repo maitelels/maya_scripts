@@ -1,0 +1,43 @@
+//START CONFIG
+	global string	$scriptPath,$thumbsize,$mayaVersion;
+	
+	$thumbsize=256; //DON'T change this until you are at least using maya2011
+	
+	global int $promtRename,$copyTexOnImport,$confirmDelete,$autoAssign;
+	$promtRename=1;
+	$copyTextures=1;
+	$confirmDelete=1;
+	$autoAssign=0;
+
+	//GET MAYA VERSION
+	string  $buffer[];
+	
+	$mayaVersion=`about -v`;
+	tokenize  $mayaVersion " .-_" $buffer;
+	$mayaVersion=$buffer[0];
+	
+	$scriptPath=`whatIs FBI_shaderLibrary`;
+	$scriptPath=`substring $scriptPath 25 (size($scriptPath)-21)`;
+	print ("DEBUG - Scriptpath: "+$scriptPath+"\n");
+	
+	//ENABLE IMPORT OF FILES FROM NEWER MAYA VERSIONS
+	optionVar -intValue fileImportIgnoreVersion 1;
+	
+	//GET MAYA LOCATION AND PUT IT IN FIRST POSITION IN THE SYSTEMS PATH VARIABLE TO ENSURE USE OF CORRECT  MAYA VERSION FOR PREVIEWS IN CASE OF MULTIPLE INSTALLED MAYAs
+	string	$mayaLocation=(`getenv MAYA_LOCATION`+"/bin"),
+			$path=(`getenv PATH`);
+	
+	//CHECK THE SYSTEM CAUSE ON LINUX AND MACOS WE NEED ":" TO SEPARATE ENV VARS AND ON WINDOWS WE NEED ";"
+	string	$os=`about -os`,
+			$systemSeparator=":";
+	if (`gmatch $os "win*"` || `gmatch $os "nt*"`)
+		$systemSeparator=";";
+	string $newPath=`toNativePath($mayaLocation+$systemSeparator+$path)`;			
+	putenv PATH $newPath;	
+	
+	global int $FBI_shaderLibrary_isInitialized;
+	$FBI_shaderLibrary_isInitialized=999;
+	
+	trace "FBI_shaderLibrary has been initialized...";
+//END CONFIG
+

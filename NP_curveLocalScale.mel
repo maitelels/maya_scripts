@@ -1,0 +1,125 @@
+//LTB: source NP_curveLocalScale;
+
+////////////////////////////////////////////////////////////////////////////
+//windows
+{
+$path = `internalVar -ubd`;
+
+source NP_curveLocalScale_start.mel;
+source NP_curveLocalScale_end.mel;
+source NP_curveLocalScale_both.mel;
+source NP_curveLocalScale_selectionTest.mel;
+
+if (`window -ex Crv_WIN`) deleteUI Crv_WIN;
+
+window -t "curve local scale tool" -s 0 Crv_WIN;
+columnLayout -adj 1 columnLayout;
+
+		floatSliderButtonGrp -label "Scale keys:" -buttonLabel "Reset" -buttonCommand "floatSliderButtonGrp -e -v 1 scaleSlider;localScale;" -cw 1 80 -adj 3
+		-field 1 -minValue -5.0 -maxValue 5.0 -s 0.01 -value 1 -cc "localScale"  scaleSlider;
+		text -align "left" -fn "boldLabelFont" "                                          -5            .            .             .             .             0            1            .             .            .             5";
+		separator -hr 1 -style "single" sep1;
+
+		rowLayout -numberOfColumns 2 -cw 1 120 -adj 2 rowLayout0;
+
+			columnLayout -adj 1 columnLayout1;
+			radioCollection radioCo;
+			radioButton  -al "left" -label "Start key pivot" -onc "localScale" start;
+			radioButton -al "left" -label "End key pivot" -onc "localScale" end;
+			radioButton -al "left" -label "both keys pivot" -onc "localScale" both;
+			separator -w 118 -hr 1 -style "single" sep2;		
+			checkBox -l "Damping off" -al "left" -cc "localScale" dampCheck;
+			checkBox -l "Reverse damping" -al "left" -cc "localScale" -vis 0 reverseDamp;					
+		setParent..;
+
+		image -h 265 -image ($path+"/curveLocalScale/scaleStart.png") image;
+		setParent..;
+
+	separator -hr 1 -style "double" sep3;
+	image -h 30 -image ($path+"/curveLocalScale/print.png") image2;
+	button -h 30 -l "UPDATE KEY SLECTION" -c "floatSliderButtonGrp -e -v 1 scaleSlider;selectionTest;" update;
+setParent ..;
+
+selectionTest;
+showWindow Crv_WIN;
+window -e -w 800 Crv_WIN;
+window -e -h 375 Crv_WIN;
+radioButton -e -sl start;
+}
+////////////////////////////////////////////////////////////////////////////
+//proc
+global proc localScale()
+{
+$path = `internalVar -ubd`;
+string $radioButton = `radioCollection -q -sl radioCo`;
+int $damping = `checkBox -q -v dampCheck`;
+int $reverseDamp =`checkBox -q -v reverseDamp`;
+int $startEnd = `radioButton  -q -sl start`;
+
+	switch ($radioButton){
+		case "start": 	
+		start;
+			if ($damping == 1){
+			checkBox -e -vis 1 reverseDamp;
+			floatSliderButtonGrp -e -label "Damp keys:" scaleSlider;
+				if ($reverseDamp ==1){
+				image -e -image ($path+"/curveLocalScale/reverseDampStart.png") image;
+				}
+				else{
+				image -e -image ($path+"/curveLocalScale/dampStart.png") image;
+				checkBox -e -l "Damping on" dampCheck;
+				}
+			}
+			else{
+			image -e -image ($path+"/curveLocalScale/scaleStart.png") image;
+			checkBox -e -l "Damping off" dampCheck;
+			checkBox -e -vis 0 reverseDamp;
+			checkBox -e -v 0 reverseDamp;
+			floatSliderButtonGrp -e -label "Scale keys:" scaleSlider;
+			}
+		break;		
+		case "end":
+		end;
+			if ($damping == 1){
+			checkBox -e -vis 1 reverseDamp;
+			floatSliderButtonGrp -e -label "Damp keys:" scaleSlider;
+				if ($reverseDamp ==1){
+				image -e -image ($path+"/curveLocalScale/reverseDampEnd.png") image;
+				}
+				else{
+				image -e -image ($path+"/curveLocalScale/dampEnd.png") image;
+				checkBox -e -l "Damping on" dampCheck;
+				}
+			}
+			else{
+			image -e -image ($path+"/curveLocalScale/scaleEnd.png") image;
+			checkBox -e -l "Damping off" dampCheck;
+			checkBox -e -vis 0 reverseDamp;
+			checkBox -e -v 0 reverseDamp;
+			floatSliderButtonGrp -e -label "Scale keys:" scaleSlider;
+			}				
+		break;
+		case "both":
+		both;
+			if ($damping == 1){
+			checkBox -e -vis 1 reverseDamp;
+			floatSliderButtonGrp -e -label "Damp keys:" scaleSlider;
+				if ($reverseDamp ==1){
+				image -e -image ($path+"/curveLocalScale/bothReverseDamp.png") image;
+				}
+				else{
+				image -e -image ($path+"/curveLocalScale/bothDamp.png") image;
+				checkBox -e -l "Damping on" dampCheck;
+				}
+			}
+			else{
+			image -e -image ($path+"/curveLocalScale/both.png") image;
+			checkBox -e -l "Damping off" dampCheck;
+			checkBox -e -vis 0 reverseDamp;
+			checkBox -e -v 0 reverseDamp;
+			floatSliderButtonGrp -e -label "Scale keys:" scaleSlider;
+			}
+		break;
+		}
+	
+}

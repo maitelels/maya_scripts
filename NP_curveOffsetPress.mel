@@ -1,0 +1,35 @@
+/*
+NP_curveOffsetPress.mel
+NP_curveOffsetPress()
+*/
+
+
+global float $attrValue[];
+global int $autoKeyState;
+clear $attrValue;
+
+{
+$autoKeyState=`autoKeyframe -q -state`;
+autoKeyframe -state false;
+string $select[]=`ls -sl`;
+string $keyableAttr[];
+float $attBuffer[];
+
+	if (size ($select)==0)
+	{
+	warning "You must at least select an object!";
+	}
+	else
+	{
+		for ($h=0; $h<size($select); $h++)
+		{
+		$keyableAttr = `listAttr -k -v $select[$h]`;
+
+			for ($i=0; $i< size ($keyableAttr); $i++)
+			{
+			$attBuffer[$i] = `getAttr ($select[$h]+"."+$keyableAttr[$i])`;
+			$attrValue[size ($attrValue)] = $attBuffer[$i];
+			}
+		}
+	}			
+} 

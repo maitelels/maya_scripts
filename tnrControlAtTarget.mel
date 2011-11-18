@@ -1,0 +1,70 @@
+/*
+tnrControlAtTarget.mel
+controlAtTarget
+*/
+
+////////////////////////////
+// tnrControlAtTarget.mel //
+/////////////////////////////////////////////////////////////
+//                                                         //
+// scripts will build a control for every object selected  //
+// at the objects position                                 //
+//                                                         //
+// usage:                                                  //
+// select any number of objects                            //
+// source "tnrControlAtTarget.mel"                         //
+// controlAtTarget();                                      //
+//                                                         //
+// all objects from selection will have a locator in place //
+//                                                         //
+/////////////////////////////////////////////////////////////
+
+
+
+global proc controlAtTarget()
+{
+	//query selection, determine size and initialize var for loop
+	string $sel[]= `ls -sl`;
+	string $restoreSel[]= `ls -sl`;
+	int $numSel=`size $sel`;
+	int $i=0;
+	
+	//loop that will create a control every item in selection at position of selection
+	for ($i=0; $i <= ($numSel-1); $i++)
+	{
+		//create locator to use as target location
+		string $targetObject[0]=`spaceLocator -n targetObject_loc`;
+		
+		//point constraint locator to selection1 and delete constraint
+		pointConstraint -n matchObjectsConstaint $sel[$i] $targetObject[0];
+		delete matchObjectsConstaint;
+		
+		//orient constraint locator to selection1 and delete constraint
+		orientConstraint -n matchObjectsConstaint $sel[$i] $targetObject[0];
+		delete matchObjectsConstaint;
+		
+		//query position and orientation of target in world space
+		float $targetPosition[2]=`xform -worldSpace -q -translation $targetObject[0]`;
+		float $targetOrientation[2]=`xform -worldSpace -q -rotation $targetObject[0]`;
+		
+		//create control and store name in var
+		string $newControlName= ($sel[$i]+"_ctrl");
+		string $newControl=`curve -d 1 -p -0.707107 0.707107 -6.18172e-08 -p 0 1 0 -p 0.707107 0.707107 0 -p -3.09086e-08 0.707107 0.707107 -p 0 1 0 -p 9.27258e-08 0.707107 -0.707107 -p 0.707107 0.707107 0 -p -3.09086e-08 0.707107 0.707107 -p -0.707107 0.707107 -6.18172e-08 -p 9.27258e-08 0.707107 -0.707107 -p 0.707107 0.707107 0 -p 1 0 0 -p 1.31134e-07 0 -1 -p 9.27258e-08 0.707107 -0.707107 -p 1.31134e-07 0 -1 -p -1 0 -8.74228e-08 -p -0.707107 0.707107 -6.18172e-08 -p -1 0 -8.74228e-08 -p -4.37114e-08 0 1 -p -3.09086e-08 0.707107 0.707107 -p -4.37114e-08 0 1 -p 1 0 0 -p 0.707107 0.707107 0 -p 1 0 0 -p 0.707107 -0.707107 0 -p 9.27258e-08 -0.707107 -0.707107 -p 1.31134e-07 0 -1 -p 9.27258e-08 -0.707107 -0.707107 -p -0.707107 -0.707107 -6.18172e-08 -p -1 0 -8.74228e-08 -p -0.707107 -0.707107 -6.18172e-08 -p -3.09086e-08 -0.707107 0.707107 -p -4.37114e-08 0 1 -p -3.09086e-08 -0.707107 0.707107 -p 0.707107 -0.707107 0 -p 1 0 0 -p 0.707107 -0.707107 0 -p 9.27258e-08 -0.707107 -0.707107 -p 0 -1 0 -p -3.09086e-08 -0.707107 0.707107 -p -0.707107 -0.707107 -6.18172e-08 -p 0 -1 0 -p 0.707107 -0.707107 0 -p 9.27258e-08 -0.707107 -0.707107 -p -0.707107 -0.707107 -6.18172e-08 -p -3.09086e-08 -0.707107 0.707107 -p 0.707107 -0.707107 0 -k 0 -k 1 -k 2 -k 3 -k 4 -k 5 -k 6 -k 7 -k 8 -k 9 -k 10 -k 11 -k 12 -k 13 -k 14 -k 15 -k 16 -k 17 -k 18 -k 19 -k 20 -k 21 -k 22 -k 23 -k 24 -k 25 -k 26 -k 27 -k 28 -k 29 -k 30 -k 31 -k 32 -k 33 -k 34 -k 35 -k 36 -k 37 -k 38 -k 39 -k 40 -k 41 -k 42 -k 43 -k 44 -k 45 -k 46 -n $newControlName`;
+		rename ("|"+$newControlName+"|curveShape1") ($newControlName+"Shape1");
+		
+		//position control in worldspace
+		setAttr ($newControl+".tx") $targetPosition[0];
+		setAttr ($newControl+".ty") $targetPosition[1];
+		setAttr ($newControl+".tz") $targetPosition[2];
+	
+		//orient control in worldspace
+		setAttr ($newControl+".rx") $targetOrientation[0];
+		setAttr ($newControl+".ry") $targetOrientation[1];
+		setAttr ($newControl+".rz") $targetOrientation[2];
+		
+		delete $targetObject[0];
+	}
+	
+	select -r $restoreSel;
+
+}
